@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok Media Service - 本地控制台</title>
+  <style>
+    :root {
+      --bg-main: #0f1117;
+      --bg-card: #181b24;
+      --bg-input: #232734;
+      --border: #2d3345;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --accent: #10b981;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: var(--bg-main);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .header-title { display: flex; align-items: center; gap: 12px; }
+    .header-title h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .badge {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.2);
+      color: var(--primary);
+    }
+    .auth-status {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .btn-refresh {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn-refresh:hover { background: #2f3547; }
+    
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+    }
+    .tab-btn:hover:not(.active) {
+      color: var(--text);
+      background: var(--bg-card);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 900px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    textarea, select, input[type="text"] {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus, select:focus, input[type="text"]:focus {
+      border-color: var(--primary);
+    }
+    textarea { resize: vertical; min-height: 90px; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .btn-submit:hover { background: var(--primary-hover); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .preview-box {
+      min-height: 280px;
+      background: var(--bg-input);
+      border-radius: 8px;
+      border: 1px dashed var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .preview-box img, .preview-box video {
+      max-width: 100%;
+      max-height: 480px;
+      border-radius: 6px;
+    }
+    .preview-placeholder {
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+    }
+    .log-box {
+      margin-top: 16px;
+      background: #090a0f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      max-height: 140px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .gallery-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .gallery-item img, .gallery-item video {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      display: block;
+    }
+    .gallery-info {
+      padding: 8px 12px;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+    }
+    .gallery-info a { color: var(--primary); text-decoration: none; }
+    .gallery-info a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- 顶栏状态 -->
+  <div class="header">
+    <div class="header-title">
+      <h1>Grok Media Service</h1>
+      <span class="badge">Local API Gateway</span>
+    </div>
+    <div class="auth-status">
+      <div><span class="status-dot" id="dotStatus"></span><span id="userEmail">检测中...</span></div>
+      <div id="tokenRemaining"></div>
+      <button class="btn-refresh" onclick="checkAuthStatus(true)">刷新凭证</button>
+    </div>
+  </div>
+
+  <!-- Tab 切换 -->
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('image')">🎨 图像生成 (Imagine)</button>
+    <button class="tab-btn" onclick="switchTab('video')">🎬 视频生成 (VideoGen)</button>
+    <button class="tab-btn" onclick="switchTab('history')">🖼️ 本地作品库</button>
+  </div>
+
+  <!-- 图像生成 Tab -->
+  <div id="tab-image">
+    <div class="grid-2">
+      <div class="card">
+        <h2>创建新图像</h2>
+        <div class="form-group">
+          <label>提示词 (Prompt)</label>
+          <textarea id="imgPrompt" placeholder="描述你想要生成的画面，例如：一只在霓虹灯雨夜街头的赛博朋克猫咪，超写实电影质感..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>纵横比 (Aspect Ratio)</label>
+            <select id="imgRatio">
+              <option value="16:9" selected>16:9 (横屏/风景)</option>
+              <option value="1:1">1:1 (方形/头像)</option>
+              <option value="9:16">9:16 (竖屏/壁纸)</option>
+              <option value="4:3">4:3 (经典构图)</option>
+              <option value="3:2">3:2 (标准单反)</option>
+              <option value="2:3">2:3 (竖向海报)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>参考图片 (可选，用于图生图/编辑)</label>
+            <input type="text" id="imgReference" placeholder="本地文件路径或 URL">
+          </div>
+        </div>
+        <button class="btn-submit" id="btnGenImage" onclick="generateImage()">
+          <span>开始生成图像</span>
+        </button>
+      </div>
+
+      <div class="card">
+        <h2>图像预览与结果</h2>
+        <div class="preview-box" id="imgPreviewBox">
+          <div class="preview-placeholder">生成的图像将在此处展示</div>
+        </div>
+        <div class="log-box" id="imgLog">就绪</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 视频生成 Tab -->
+  <div id="tab-video" style="display: none;">
+    <div class="grid-2">
+      <div class="card">
+        <h2>创建视频</h2>
+        <div class="form-group">
+          <label>视频动作提示词 (Prompt)</label>
+          <textarea id="vidPrompt" placeholder="描述视频的镜头运镜与动态，例如：镜头缓缓向前推，微风轻轻吹拂人物的发丝，眼神充满灵气..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>首帧 / 参考图 (First Frame)</label>
+            <input type="text" id="vidFirstFrame" placeholder="本地图片路径或 URL (可选)">
+          </div>
+          <div class="form-group">
+            <label>比例 (Aspect Ratio)</label>
+            <select id="vidRatio">
+              <option value="16:9" selected>16:9 (横屏)</option>
+              <option value="9:16">9:16 (竖屏短视频)</option>
+              <option value="1:1">1:1 (方形)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>时长 (Duration)</label>
+            <select id="vidDuration">
+              <option value="6" selected>6 秒 (推荐，稳定性好)</option>
+              <option value="10">10 秒</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>分辨率 (Resolution)</label>
+            <select id="vidResolution">
+              <option value="480p" selected>480p (速度快)</option>
+              <option value="720p">720p (高清)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-submit" id="btnGenVideo" onclick="generateVideo()">
+          <span>生成视频 (自动轮询下载)</span>
+        </button>
+      </div>
+
+      <div class="card">
+        <h2>视频预览与生成日志</h2>
+        <div class="preview-box" id="vidPreviewBox">
+          <div class="preview-placeholder">生成的视频将在此处自动播放</div>
+        </div>
+        <div class="log-box" id="vidLog">就绪</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 历史作品 Tab -->
+  <div id="tab-history" style="display: none;">
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2>本地已保存的作品 (outputs/)</h2>
+        <button class="btn-refresh" onclick="loadHistory()">刷新作品列表</button>
+      </div>
+      <div class="gallery-grid" id="historyGallery">
+        <div class="preview-placeholder">正在载入...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tab 切换逻辑
+    function switchTab(tab) {
+      document.querySelectorAll('.nav-tabs .tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', ['image', 'video', 'history'][i] === tab);
+      });
+      document.getElementById('tab-image').style.display = tab === 'image' ? 'block' : 'none';
+      document.getElementById('tab-video').style.display = tab === 'video' ? 'block' : 'none';
+      document.getElementById('tab-history').style.display = tab === 'history' ? 'block' : 'none';
+      if (tab === 'history') loadHistory();
+    }
+
+    // 检查并显示当前 Token 状态
+    async function checkAuthStatus(forceRefresh = false) {
+      try {
+        const url = forceRefresh ? '/v1/auth/refresh' : '/v1/auth/status';
+        const method = forceRefresh ? 'POST' : 'GET';
+        const resp = await fetch(url, { method });
+        const data = await resp.json();
+        
+        const dot = document.getElementById('dotStatus');
+        const userEmail = document.getElementById('userEmail');
+        const remaining = document.getElementById('tokenRemaining');
+        
+        if (data.status === 'active' || (data.email && !data.expired)) {
+          dot.style.background = '#10b981';
+          userEmail.textContent = data.email || '已连接';
+          if (data.remaining_seconds) {
+            const mins = Math.floor(data.remaining_seconds / 60);
+            remaining.textContent = `(Token 剩余约 ${mins} 分钟)`;
+          } else {
+            remaining.textContent = '';
+          }
+        } else {
+          dot.style.background = '#ef4444';
+          userEmail.textContent = data.email ? `${data.email} (已过期)` : '未连接';
+          remaining.textContent = '';
+        }
+      } catch (e) {
+        document.getElementById('dotStatus').style.background = '#ef4444';
+        document.getElementById('userEmail').textContent = '服务未响应';
+      }
+    }
+
+    // 生成图像
+    async function generateImage() {
+      const prompt = document.getElementById('imgPrompt').value.trim();
+      const ratio = document.getElementById('imgRatio').value;
+      const ref = document.getElementById('imgReference').value.trim();
+      const log = document.getElementById('imgLog');
+      const btn = document.getElementById('btnGenImage');
+      const box = document.getElementById('imgPreviewBox');
+
+      if (!prompt) {
+        alert('请输入图像提示词！');
+        return;
+      }
+
+      btn.disabled = true;
+      log.textContent = `[${new Date().toLocaleTimeString()}] 正在请求生成图像...`;
+
+      try {
+        const endpoint = ref ? '/v1/images/edits' : '/v1/images/generations';
+        const payload = ref ? { prompt, image: ref, aspect_ratio: ratio } : { prompt, aspect_ratio: ratio };
+
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const resData = await resp.json();
+        if (!resp.ok) {
+          throw new Error(resData.error?.message || JSON.stringify(resData));
+        }
+
+        const imgUrl = resData.data[0].url;
+        log.textContent = `[${new Date().toLocaleTimeString()}] 生成成功！文件已落盘。\nLocal URL: ${imgUrl}`;
+        box.innerHTML = `<img src="${imgUrl}" alt="Generated Image"><div style="margin-top: 8px;"><a href="${imgUrl}" target="_blank" style="color: var(--primary); font-size: 13px;">在新窗口打开大图</a></div>`;
+      } catch (err) {
+        log.textContent = `[${new Date().toLocaleTimeString()}] 生成失败: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // 生成视频 (一键同步等待)
+    async function generateVideo() {
+      const prompt = document.getElementById('vidPrompt').value.trim();
+      const firstFrame = document.getElementById('vidFirstFrame').value.trim();
+      const ratio = document.getElementById('vidRatio').value;
+      const duration = parseInt(document.getElementById('vidDuration').value);
+      const resolution = document.getElementById('vidResolution').value;
+      const log = document.getElementById('vidLog');
+      const btn = document.getElementById('btnGenVideo');
+      const box = document.getElementById('vidPreviewBox');
+
+      if (!prompt) {
+        alert('请输入视频提示词！');
+        return;
+      }
+
+      btn.disabled = true;
+      log.textContent = `[${new Date().toLocaleTimeString()}] 正在提交视频任务并启动轮询... (通常耗时 30-90 秒)`;
+
+      try {
+        const payload = {
+          prompt,
+          aspect_ratio: ratio,
+          duration,
+          resolution_name: resolution
+        };
+        if (firstFrame) payload.first_frame = firstFrame;
+
+        const resp = await fetch('/v1/videos/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const resData = await resp.json();
+        if (!resp.ok) {
+          throw new Error(resData.error?.message || JSON.stringify(resData));
+        }
+
+        const vidUrl = resData.local_url || (resData.video && resData.video.url);
+        log.textContent = `[${new Date().toLocaleTimeString()}] 视频已完成并下载至本地！\nLocal URL: ${vidUrl}`;
+        box.innerHTML = `<video controls autoplay loop src="${vidUrl}"></video><div style="margin-top: 8px;"><a href="${vidUrl}" target="_blank" style="color: var(--primary); font-size: 13px;">在新窗口打开视频</a></div>`;
+      } catch (err) {
+        log.textContent = `[${new Date().toLocaleTimeString()}] 生成失败: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // 载入历史记录
+    async function loadHistory() {
+      const gallery = document.getElementById('historyGallery');
+      try {
+        const resp = await fetch('/v1/history');
+        const data = await resp.json();
+        let html = '';
+
+        (data.images || []).forEach(img => {
+          html += `
+            <div class="gallery-item">
+              <a href="${img.url}" target="_blank"><img src="${img.url}"></a>
+              <div class="gallery-info">
+                <span>图片 (${(img.size_bytes / 1024).toFixed(0)} KB)</span>
+                <a href="${img.url}" target="_blank">查看</a>
+              </div>
+            </div>`;
+        });
+
+        (data.videos || []).forEach(vid => {
+          html += `
+            <div class="gallery-item">
+              <video controls src="${vid.url}"></video>
+              <div class="gallery-info">
+                <span>视频 (${(vid.size_bytes / 1024 / 1024).toFixed(1)} MB)</span>
+                <a href="${vid.url}" target="_blank">下载</a>
+              </div>
+            </div>`;
+        });
+
+        gallery.innerHTML = html || '<div class="preview-placeholder">暂无已保存的作品</div>';
+      } catch (e) {
+        gallery.innerHTML = `<div class="preview-placeholder">获取历史失败: ${e.message}</div>`;
+      }
+    }
+
+    // 初始化检查状态
+    checkAuthStatus();
+    setInterval(checkAuthStatus, 60000);
+  </script>
+</body>
+</html>

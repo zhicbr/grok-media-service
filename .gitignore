@@ -1,0 +1,22 @@
+# 输出目录 (包含生成的测试图片与视频)
+outputs/
+outputs/*
+*.mp4
+*.jpg
+*.png
+*.webp
+*.mov
+
+# Python 缓存与环境
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# 日志与状态
+logs/
+*.log
+.DS_Store
+Thumbs.db

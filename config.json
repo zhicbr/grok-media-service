@@ -1,0 +1,27 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8088
+  },
+  "proxy": "http://127.0.0.1:7890",
+  "defaults": {
+    "image": {
+      "aspect_ratio": "16:9"
+    },
+    "video": {
+      "duration": 6,
+      "resolution_name": "480p",
+      "aspect_ratio": "16:9"
+    }
+  },
+  "storage": {
+    "auto_save": true,
+    "images_dir": "outputs/images",
+    "videos_dir": "outputs/videos"
+  },
+  "auth": {
+    "auto_read_grok_auth": true,
+    "grok_auth_path": "~/.grok/auth.json",
+    "auto_refresh_token": true
+  }
+}
