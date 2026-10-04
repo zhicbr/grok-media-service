@@ -482,8 +482,11 @@
         }
 
         const vidUrl = resData.local_url || (resData.video && resData.video.url);
-        log.textContent = `[${new Date().toLocaleTimeString()}] 视频已完成并下载至本地！\nLocal URL: ${vidUrl}`;
+        const isLocal = resData.local_url && resData.local_url.includes('/outputs/');
+        const statusMsg = isLocal ? '视频已完成并成功保存至本地！' : '视频云端已就绪！';
+        log.textContent = `[${new Date().toLocaleTimeString()}] ${statusMsg}\n播放地址: ${vidUrl}`;
         box.innerHTML = `<video controls autoplay loop src="${vidUrl}"></video><div style="margin-top: 8px;"><a href="${vidUrl}" target="_blank" style="color: var(--primary); font-size: 13px;">在新窗口打开视频</a></div>`;
+        loadHistory();
       } catch (err) {
         log.textContent = `[${new Date().toLocaleTimeString()}] 生成失败: ${err.message}`;
       } finally {

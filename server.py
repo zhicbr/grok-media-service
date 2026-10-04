@@ -16,6 +16,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 import threading
 import mimetypes
+import shutil
+import subprocess
 
 # 基础目录定位
 if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
@@ -151,25 +153,29 @@ class AuthManager:
 
         proxy = self.config.get("proxy")
         opener = get_urllib_opener(proxy)
-        try:
-            with opener.open(req, timeout=15) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                new_key = data.get("access_token")
-                new_rt = data.get("refresh_token")
-                expires_in = data.get("expires_in", 7200)
+        
+        for attempt in range(2):
+            try:
+                with opener.open(req, timeout=30) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    new_key = data.get("access_token")
+                    new_rt = data.get("refresh_token")
+                    expires_in = data.get("expires_in", 7200)
 
-                if new_key:
-                    self.auth_info["key"] = new_key
-                    if new_rt:
-                        self.auth_info["refresh_token"] = new_rt
-                    new_exp = datetime.now(timezone.utc).timestamp() + expires_in
-                    self.auth_info["expires_at"] = datetime.fromtimestamp(new_exp, timezone.utc).isoformat()
-                    print(f"[Auth] Token 刷新成功！新有效期至: {self.auth_info['expires_at']}")
+                    if new_key:
+                        self.auth_info["key"] = new_key
+                        if new_rt:
+                            self.auth_info["refresh_token"] = new_rt
+                        new_exp = datetime.now(timezone.utc).timestamp() + expires_in
+                        self.auth_info["expires_at"] = datetime.fromtimestamp(new_exp, timezone.utc).isoformat()
+                        print(f"[*] Token 刷新成功！新有效期至: {self.auth_info['expires_at']}")
 
-                    # 写回磁盘
-                    self._save_to_disk()
-        except Exception as e:
-            print(f"[Auth] Token 刷新请求失败: {e}")
+                        # 写回磁盘
+                        self._save_to_disk()
+                        return
+            except Exception as e:
+                print(f"[*] Token 刷新请求失败 (尝试 {attempt+1}/2): {e}")
+                time.sleep(1)
 
     def _save_to_disk(self):
         try:
@@ -179,11 +185,17 @@ class AuthManager:
                 disk_data[self.current_scope] = self.auth_info
                 with open(self.auth_path, "w", encoding="utf-8") as f:
                     json.dump(disk_data, f, indent=2)
-                print(f"[Auth] 已同步写回 {self.auth_path}")
+                print(f"[*] 已同步写回 {self.auth_path}")
         except Exception as e:
-            print(f"[Auth] 写回 auth.json 失败: {e}")
+            print(f"[*] 写回 auth.json 失败: {e}")
 
     def get_status(self):
+        # 如果即将过期或已过期，主动尝试刷新
+        try:
+            self.get_token()
+        except Exception:
+            pass
+
         token_present = bool(self.auth_info.get("key"))
         expires_at_str = self.auth_info.get("expires_at")
         expired = False
@@ -302,13 +314,63 @@ class GrokClient:
     def poll_video(self, request_id):
         return self._request("GET", f"/videos/{request_id}", timeout=30)
 
-    def download_file(self, url, dest_path):
-        req = urllib.request.Request(url, headers={"User-Agent": "grok-build/1.0.44"})
-        with self.opener.open(req, timeout=180) as resp:
-            with open(dest_path, "wb") as f:
-                while chunk := resp.read(64 * 1024):
-                    f.write(chunk)
-        return True
+    def download_file(self, url, dest_path, timeout=60):
+        dest_path = Path(dest_path)
+        tmp_path = dest_path.with_suffix(dest_path.suffix + ".part")
+
+        # 1. 优先使用系统内置的 curl.exe（Windows 10/11、macOS、Linux 标配，代理连接极稳且速度快）
+        curl_bin = shutil.which("curl")
+        if curl_bin:
+            cmd = [
+                curl_bin, "-s", "-S", "-L",
+                "--connect-timeout", "15",
+                "--max-time", str(timeout),
+                "-o", str(tmp_path)
+            ]
+            if self.proxy:
+                cmd.extend(["-x", self.proxy])
+            cmd.append(url)
+
+            try:
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout + 5)
+                if res.returncode == 0 and tmp_path.exists() and tmp_path.stat().st_size > 0:
+                    if dest_path.exists():
+                        dest_path.unlink()
+                    tmp_path.rename(dest_path)
+                    print(f"[*] 视频极速下载成功: {dest_path.name} ({dest_path.stat().st_size} 字节)")
+                    return True
+                else:
+                    err_msg = res.stderr.strip()
+                    print(f"[*] curl 下载未成功 (code {res.returncode}): {err_msg}，正在回退至原生流式下载...")
+            except Exception as e:
+                print(f"[*] curl 执行异常: {e}，正在回退至原生流式下载...")
+
+        # 2. 原生 urllib 流式下载（做 Content-Length 完整性校验）
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "grok-build/1.0.44"})
+            with self.opener.open(req, timeout=timeout) as resp:
+                expected_len = int(resp.headers.get("Content-Length", 0))
+                with open(tmp_path, "wb") as f:
+                    downloaded = 0
+                    while chunk := resp.read(64 * 1024):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                if expected_len > 0 and downloaded < expected_len:
+                    raise IOError(f"下载不完整: 预期 {expected_len} 字节，实际仅下载 {downloaded} 字节")
+
+            if dest_path.exists():
+                dest_path.unlink()
+            tmp_path.rename(dest_path)
+            print(f"[*] 原生下载成功: {dest_path.name} ({dest_path.stat().st_size} 字节)")
+            return True
+        except Exception as e:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except Exception:
+                    pass
+            print(f"[*] 下载视频遇到异常: {e}")
+            raise e
 
 
 # 初始化全局单例
@@ -531,14 +593,16 @@ class GrokMediaHandler(SimpleHTTPRequestHandler):
             local_file = VIDEOS_DIR / filename
             if not local_file.exists():
                 try:
-                    print(f"[Video] 正在下载生成的视频: {remote_url} -> {local_file}")
-                    GROK_CLIENT.download_file(remote_url, local_file)
+                    print(f"[*] 正在下载生成的视频: {remote_url} -> {local_file.name}")
+                    GROK_CLIENT.download_file(remote_url, local_file, timeout=60)
                 except Exception as e:
-                    print(f"[Video] 下载视频失败: {e}")
+                    print(f"[*] 下载视频失败: {e}")
 
             if local_file.exists():
                 resp_data["local_url"] = f"http://{host}/outputs/videos/{filename}"
                 resp_data["local_path"] = str(local_file)
+            else:
+                resp_data["local_url"] = remote_url
 
         self._send_json(200, resp_data)
 
@@ -585,13 +649,15 @@ class GrokMediaHandler(SimpleHTTPRequestHandler):
                 local_file = VIDEOS_DIR / filename
 
                 if remote_url:
-                    print(f"[Video Sync] 视频生成成功，正在下载到本地: {local_file}")
+                    print(f"[*] 视频生成成功，正在拉取到本地: {local_file.name}")
                     try:
-                        GROK_CLIENT.download_file(remote_url, local_file)
+                        GROK_CLIENT.download_file(remote_url, local_file, timeout=60)
                         poll_resp["local_url"] = f"http://{host}/outputs/videos/{filename}"
                         poll_resp["local_path"] = str(local_file)
                     except Exception as e:
+                        print(f"[*] 本地缓存下载遇到异常: {e}")
                         poll_resp["download_error"] = str(e)
+                        poll_resp["local_url"] = remote_url
 
                 self._send_json(200, poll_resp)
                 return
